@@ -114,7 +114,9 @@ void loop()
   motorController.forward(mappedDirection);
 
   // Aguarda um intervalo de tempo antes de repetir o loop
-  delay(1000);
+
+  sendMessage("Velocidade Alvo:" + String(targetSpeed) + ", PosicaoAlvoX:" + String(targetX) + ", PosicaoAlvoY:" + String(targetY));
+  delay(10000);
 }
 
 void inicializeServer()
@@ -156,11 +158,13 @@ void connectServer()
     }
     // Aceita a nova conexão
     client = server.available();
-    Serial.println("Novo cliente conectado!");
+    Serial.println("Nova conexao efetuada!");
+    sendMessage("Nova conexao efetuada!");
   }
 
   // Verifica se há dados disponíveis para leitura no cliente TCP
-  if (client.available()) {
+  if (client.available()) 
+  {
     // Lê os dados recebidos
     String data = client.readStringUntil('\n');
     // Processa os dados recebidos
@@ -176,26 +180,37 @@ void processTrajectoryData(String data) {
   String point;
   int index = 0;
 
-  while ((index = data.indexOf(',')) != -1) {
+  while ((index = data.indexOf(';')) != -1) 
+  {
     point = data.substring(0, index);
     data = data.substring(index + 1);
 
+    String xCoordinate = point.substring(0, point.indexOf(','));
+    String yCoordinate = point.substring(point.indexOf(',') + 1);
+
     std::array<double, 2> newPoint;
-    newPoint[0] = point.toDouble();
-    
-    point = data.substring(0, data.indexOf(','));
-    data = data.substring(data.indexOf(',') + 1);
-    
-    newPoint[1] = point.toDouble();
+    newPoint[0] = xCoordinate.toDouble();
+    newPoint[1] = yCoordinate.toDouble();
 
     // Adiciona o novo ponto ao vetor de trajetória
     trajectoryPoints.push_back(newPoint);
   }
 
-  numPoints = trajectoryPoints.size();
+  // Processa o último ponto após o último ';'
+  String xCoordinate = data.substring(0, data.indexOf(','));
+  String yCoordinate = data.substring(data.indexOf(',') + 1);
+
+  std::array<double, 2> newPoint;
+  newPoint[0] = xCoordinate.toDouble();
+  newPoint[1] = yCoordinate.toDouble();
+
+  // Adiciona o último ponto ao vetor de trajetória
+  trajectoryPoints.push_back(newPoint);
+
+  int numPoints = trajectoryPoints.size();
   // Imprime os pontos de trajetória recebidos
   Serial.println("Pontos de Trajetória Recebidos:");
-  for (int i = 0; i < trajectoryPoints.size(); i++) {
+  for (int i = 0; i < numPoints; i++) {
     Serial.print("Ponto ");
     Serial.print(i);
     Serial.print(": X=");
@@ -265,4 +280,9 @@ void processCurrentSpeed()
   previousX = currentX;
   previousY = currentY;
   previousTime = currentTime;
+}
+
+void sendMessage(String message)
+{
+  client.println(message);
 }
