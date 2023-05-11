@@ -26,6 +26,9 @@ int numPoints = 0;
 
 unsigned long previousTime = 0;
 unsigned long currentTime = 0;
+unsigned long lastTrajectoryTime = 0;
+unsigned long trajectoryTimeout = 5000; // Tempo limite para receber uma nova lista de posições (em milissegundos)
+
 double previousX = 0;
 double previousY = 0;
 
@@ -85,6 +88,12 @@ void setup()
 void loop() 
 {
   connectServer();
+
+  // Verifica se há uma nova lista de posições recebidas
+  if (millis() - lastTrajectoryTime > trajectoryTimeout) {
+    // Se o tempo limite for excedido, pare os motores
+    motorController.stop();
+  }
   
   updateCurrentPosition();
 
@@ -105,18 +114,39 @@ void loop()
   speedController.compute();
 
   // Mapeia os valores de velocidade e direção para o intervalo de -100 a 100
-  int mappedSpeed = map(currentSpeed, -100, 100, -255, 255);
-  int mappedDirection = currentSpeed > 0 ? VespaMotors::FORWARD : VespaMotors::BACKWARD;
+  int mappedSpeedLeft = map(currentSpeed, -100, 100, -255, 255);
+  int mappedSpeedRight = map(currentSpeed, -100, 100, -255, 255);
 
-  // Atualiza os motores
-  motorController.setSpeedLeft(mappedSpeed);
-  motorController.setSpeedRight(mappedSpeed);
-  motorController.forward(mappedDirection);
+  // Define a diferença de velocidade desejada entre os motores (pode ser ajustada)
+  int mappedSpeedLeftAdjusted = mappedSpeedLeft;
+  int mappedSpeedRightAdjusted = mappedSpeedRight;
+
+  if (targetX != currentX || targetY != currentY)
+   {
+    double deltaX = targetX - currentX;
+    double deltaY = targetY - currentY;
+    double angle = atan2(deltaY, deltaX);
+
+    // Calcula a diferença de velocidade entre os motores com base no ângulo
+    double speedDifferenceFactor = abs(cos(angle));
+    mappedSpeedLeftAdjusted = speedDifferenceFactor * mappedSpeedLeft;
+    mappedSpeedRightAdjusted = mappedSpeedRight;
+    
+    if (deltaY < 0) {
+      // Inverte a diferença de velocidade se o movimento for para trás
+      mappedSpeedLeftAdjusted = -mappedSpeedLeftAdjusted;
+    }
+  }
+
+  // Atualiza os motores com as velocidades ajustadas
+  motorController.setSpeedLeft(mappedSpeedLeftAdjusted);
+  motorController.setSpeedRight(mappedSpeedRightAdjusted);
 
   // Aguarda um intervalo de tempo antes de repetir o loop
 
   sendMessage("Velocidade Alvo:" + String(targetSpeed) + ", PosicaoAlvoX:" + String(targetX) + ", PosicaoAlvoY:" + String(targetY));
-  delay(10000);
+
+  delay(100);
 }
 
 void inicializeServer()
@@ -169,6 +199,7 @@ void connectServer()
     String data = client.readStringUntil('\n');
     // Processa os dados recebidos
     processTrajectoryData(data);
+    lastTrajectoryTime = millis();
   }
 }
 
