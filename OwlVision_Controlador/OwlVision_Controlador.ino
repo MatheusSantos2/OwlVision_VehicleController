@@ -27,7 +27,7 @@ double currentY = 0;
 
 double targetX = 0; 
 double targetY = 0; 
-double defaultSpeed = 20;
+double defaultSpeed = 80;
 double distanceBetweenWheels = 12;
 double tolerance = 1;
 double theta_time = 1;
@@ -37,7 +37,7 @@ String trajectoryData = "";
 bool canGetNewTrajectory = true;
 
 //-------------------Desligar Motores-------------------------------//
-const unsigned long timeout = 50000;  // Tempo limite de 5 segundos
+const unsigned long timeout = 90000;  // Tempo limite de 9 segundos
 unsigned long lastMessageTime = 0;
 
 //----------------------------------------------------------------SETUP-------------------------------------------------
@@ -187,17 +187,23 @@ void engineControl(){
     double delta_y = setpointY - currentY;
 
     // Calcular a orientação do ponto alvo em relação ao robô
-    double theta_target = atan2(delta_y, delta_x);
+    double theta_target = atan2(delta_x, delta_y);
 
     // Calcular as velocidades das rodas diretamente
     double leftSpeed = defaultSpeed + (distanceBetweenWheels / 2) * theta_target/theta_time;
+
+    if (leftSpeed > 100){
+      leftSpeed = 100;
+    }
+
     double rightSpeed = defaultSpeed - (distanceBetweenWheels / 2) * theta_target/theta_time;
+   
+    if (rightSpeed > 100){
+      rightSpeed = 100;
+    }
 
-    int leftSpeedMapped = map(leftSpeed, 15, 25, 80, 100);
-    int rightSpeedMapped = map(rightSpeed, 15, 25, 80, 100);
-
-    Serial.println("loop - Velocidade Direita: " + String(rightSpeedMapped) + "; Velocidade Esquerda: " + String(leftSpeedMapped) + " Angle: " + theta_target);
-    accelerateMotors(rightSpeedMapped, leftSpeedMapped);
+    Serial.println("loop - Velocidade Direita: " + String(rightSpeed) + "; Velocidade Esquerda: " + String(leftSpeed) + " Angle: " + theta_target);
+    accelerateMotors(rightSpeed, leftSpeed);
     delay(1000);
 
     Serial.println("loop - Pausa motores");
