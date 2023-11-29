@@ -24,20 +24,22 @@ int nextPointIndex = 0;
 int numPoints = 0;
 double currentX = 0; 
 double currentY = 0;
+double theta_current = 0.0;
 
 double targetX = 0; 
 double targetY = 0; 
-double defaultSpeed = 80;
+double defaultSpeed = 20;
 double distanceBetweenWheels = 12;
 double tolerance = 1;
-double theta_time = 1;
+double theta_time = 10;
+double wheelRadius = 6;
 
 String lastTrajectoryData = "data"; 
 String trajectoryData = "";
 bool canGetNewTrajectory = true;
 
 //-------------------Desligar Motores-------------------------------//
-const unsigned long timeout = 90000;  // Tempo limite de 9 segundos
+const unsigned long timeout = 50000;  // Tempo limite de 9 segundos
 unsigned long lastMessageTime = 0;
 
 //----------------------------------------------------------------SETUP-------------------------------------------------
@@ -185,25 +187,20 @@ void engineControl(){
     // Calcular a diferença entre as coordenadas do ponto alvo e do robô
     double delta_x = setpointX - currentX;
     double delta_y = setpointY - currentY;
-
     // Calcular a orientação do ponto alvo em relação ao robô
-    double theta_target = atan2(delta_x, delta_y);
-
+    updateOrientationPosition(delta_x, delta_x);
     // Calcular as velocidades das rodas diretamente
-    double leftSpeed = defaultSpeed + (distanceBetweenWheels / 2) * theta_target/theta_time;
+    double leftSpeed = defaultSpeed + (distanceBetweenWheels / 2) * theta_current/theta_time;
+    double rightSpeed = defaultSpeed - (distanceBetweenWheels / 2) * theta_current/theta_time;
+    double leftSpeedConstrain = map(leftSpeed, 15, 30, 80, 90);
+    double rightSpeedConstrain = map(rightSpeed, 15, 30, 80, 90);
+    Serial.println("loop - Velocidade Direita: " + String(rightSpeedConstrain) + "; Velocidade Esquerda: " + String(leftSpeedConstrain) + " Theta: " + theta_current);
 
-    if (leftSpeed > 100){
-      leftSpeed = 100;
-    }
+    leftSpeedConstrain = constrain(leftSpeedConstrain, 80, 100);
+    rightSpeedConstrain = constrain(rightSpeedConstrain, 80, 100);
 
-    double rightSpeed = defaultSpeed - (distanceBetweenWheels / 2) * theta_target/theta_time;
-   
-    if (rightSpeed > 100){
-      rightSpeed = 100;
-    }
-
-    Serial.println("loop - Velocidade Direita: " + String(rightSpeed) + "; Velocidade Esquerda: " + String(leftSpeed) + " Angle: " + theta_target);
-    accelerateMotors(rightSpeed, leftSpeed);
+    Serial.println("loop - Velocidade Direita: " + String(rightSpeedConstrain) + "; Velocidade Esquerda: " + String(leftSpeedConstrain) + " Theta: " + theta_current);
+    accelerateMotors(rightSpeed, leftSpeedConstrain);
     delay(1000);
 
     Serial.println("loop - Pausa motores");
@@ -277,4 +274,12 @@ void enginePause(){
   numPoints = 0;
 
   delay(1000);
+}
+
+void updateOrientationPosition(float delta_x, float delta_y) {
+  // Estima a mudança na orientação
+  float delta_theta = atan2(delta_x, delta_y);
+
+  // Atualiza a orientação atual
+  theta_current += delta_theta;
 }
