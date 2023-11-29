@@ -27,17 +27,18 @@ double currentY = 0;
 
 double targetX = 0; 
 double targetY = 0; 
-double defaultSpeed = 5;
-double distanceBetweenWheels = 13;
+double defaultSpeed = 20;
+double distanceBetweenWheels = 12;
 double tolerance = 1;
+double theta_time = 1;
 
 String lastTrajectoryData = "data"; 
 String trajectoryData = "";
+bool canGetNewTrajectory = true;
 
 //-------------------Desligar Motores-------------------------------//
-const unsigned long timeout = 90000;  // Tempo limite de 9 segundos
+const unsigned long timeout = 50000;  // Tempo limite de 5 segundos
 unsigned long lastMessageTime = 0;
-bool systemEnabled = true;
 
 //----------------------------------------------------------------SETUP-------------------------------------------------
 
@@ -77,13 +78,16 @@ void taskTrajectoryFunction(void* parameter){
       trajectoryData = removeFirstPosition(data);
       trajectoryData.trim();
 
-      if (trajectoryLabel == "Trajectory" && lastTrajectoryData != trajectoryData && numPoints == 0) 
+      if (trajectoryLabel == "Trajectory" && lastTrajectoryData != trajectoryData && canGetNewTrajectory) 
       {
         Serial.println("Sucess - taskTrajectoryFunction - Label: " + trajectoryLabel + "; Data: " + trajectoryData);
 
         processTrajectoryData(trajectoryData);
         lastTrajectoryData = trajectoryData;
         resetTimer();
+      }
+      else{
+        client.flush();
       }
     }
     vTaskDelay(pdMS_TO_TICKS(100)); // Aguardar 10 milissegundos antes de verificar novamente
@@ -151,10 +155,9 @@ void loop(){
   if(hasTimerExpired())
     enginePause();
 
-  if (numPoints > 0 && systemEnabled){
+  if (numPoints > 0){
     engineControl();
   }
-
   delay(100);
 }
 
@@ -173,48 +176,53 @@ void connectTrajectoryServer(){
 }
 
 void engineControl(){
+  
   double setpointX = readTargetPositionX();
   double setpointY = readTargetPositionY();
   
-  // Calcular a diferença entre as coordenadas do ponto alvo e do robô
-  double delta_x = setpointX - currentX;
-  double delta_y = setpointY - currentY;
-
-  // Calcular a orientação do ponto alvo em relação ao robô
-  double theta_target = atan2(delta_y, delta_x);
-
-  // Calcular as velocidades das rodas diretamente
-  double leftSpeed = defaultSpeed + (distanceBetweenWheels / 2) * sin(theta_target);
-  double rightSpeed = defaultSpeed - (distanceBetweenWheels / 2) * sin(theta_target);
-
-  Serial.println("loop - Velocidade Direita: " + String(rightSpeed) + "; Velocidade Esquerda: " + String(leftSpeed) + " Angle: " + theta_target);
-  
-  if((leftSpeed > 100 || leftSpeed < 0) && (rightSpeed > 100 || rightSpeed < 0))
+  if(setpointX != -150 && setpointY != -150)
   {
-      accelerateMotors(rightSpeed, leftSpeed);
+    // Calcular a diferença entre as coordenadas do ponto alvo e do robô
+    double delta_x = setpointX - currentX;
+    double delta_y = setpointY - currentY;
+
+    // Calcular a orientação do ponto alvo em relação ao robô
+    double theta_target = atan2(delta_y, delta_x);
+
+    // Calcular as velocidades das rodas diretamente
+    double leftSpeed = defaultSpeed + (distanceBetweenWheels / 2) * theta_target/theta_time;
+    double rightSpeed = defaultSpeed - (distanceBetweenWheels / 2) * theta_target/theta_time;
+
+    int leftSpeedMapped = map(leftSpeed, 15, 25, 80, 100);
+    int rightSpeedMapped = map(rightSpeed, 15, 25, 80, 100);
+
+    Serial.println("loop - Velocidade Direita: " + String(rightSpeedMapped) + "; Velocidade Esquerda: " + String(leftSpeedMapped) + " Angle: " + theta_target);
+    accelerateMotors(rightSpeedMapped, leftSpeedMapped);
+    delay(1000);
+
+    Serial.println("loop - Pausa motores");
+    motorController.stop();
+    
+    String message = String(leftSpeed) + "," + String(rightSpeed) + "," + String(setpointX) + "," + String(setpointY) + "," + String(nextPointIndex);
+    sendMessage(message);
+
+    currentX = setpointX; 
+    currentY = setpointY;
+
+    Serial.println("loop - spx: " + String(setpointX) + " ; spy: " + String(setpointY));
+    updateNextPoint();
   }
-
-  delay(10000);
-  Serial.println("loop - Pausa motores");
-  motorController.stop();
-  
-  String message = String(leftSpeed) + "," + String(rightSpeed) + "," + String(setpointX) + "," + String(setpointY) + "," + String(currentX) + "," + String(currentY);
-  sendMessage(message);
-
-  currentX = setpointX; 
-  currentY = setpointY;
-
-  Serial.println("loop - spx: " + String(setpointX) + " ; spy: " + String(setpointY));
-  updateNextPoint();
 }
 
 void updateNextPoint(){
-  if(numPoints > 1)
+  if(numPoints > 0)
   {
     nextPointIndex = (nextPointIndex + 1) % numPoints;
     
-    if(nextPointIndex > 4){
-      numPoints  = 0;
+    if(nextPointIndex == 4){
+      trajectoryPoints.clear();
+      motorController.stop();
+      canGetNewTrajectory = true;
     }
   }
 }
@@ -224,7 +232,7 @@ double readTargetPositionX(){
         const auto& desiredPoint = trajectoryPoints[nextPointIndex];
         return desiredPoint[0];
     }
-    return 0;
+    return -150;
 }
 
 double readTargetPositionY(){
@@ -232,7 +240,7 @@ double readTargetPositionY(){
         const auto& desiredPoint = trajectoryPoints[nextPointIndex];
         return desiredPoint[1];
     }
-    return 0;
+    return -150;
 }
 
 void accelerateMotors(int rightEngine, int leftEngine){
@@ -247,14 +255,12 @@ void sendMessage(String message){
 
 bool hasTimerExpired()
 {
-    return (millis() - lastMessageTime > timeout) && systemEnabled;
+    return (millis() - lastMessageTime > timeout);
 }
 
 void resetTimer() {
-  lastMessageTime = millis();  
-  if (!systemEnabled) {
-    systemEnabled = true;
-  }
+  lastMessageTime = millis(); 
+  canGetNewTrajectory = false; 
 }
 
 void enginePause(){
@@ -263,7 +269,6 @@ void enginePause(){
   trajectoryPoints.clear();
   nextPointIndex = 0;
   numPoints = 0;
-  systemEnabled = false;
 
   delay(1000);
 }
