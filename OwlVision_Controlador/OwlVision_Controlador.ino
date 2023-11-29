@@ -8,8 +8,8 @@
 #include <array>
 
 //Servidor TCP/IP
-const char* ssid = "Apto 303";
-const char* password = "P@$303W0rd";
+const char* ssid = "SANTANA 2581";
+const char* password = "senha@29";
 int serverPort = 80;
 
 WiFiServer server(serverPort);
@@ -89,7 +89,8 @@ void taskTrajectoryFunction(void* parameter){
         resetTimer();
       }
       else{
-        client.flush();
+        // Descarta as requisições intermediárias
+        client.readStringUntil('\n');     
       }
     }
     vTaskDelay(pdMS_TO_TICKS(100)); // Aguardar 10 milissegundos antes de verificar novamente
@@ -201,7 +202,7 @@ void engineControl(){
 
     Serial.println("loop - Velocidade Direita: " + String(rightSpeedConstrain) + "; Velocidade Esquerda: " + String(leftSpeedConstrain) + " Theta: " + theta_current);
     accelerateMotors(rightSpeed, leftSpeedConstrain);
-    delay(1000);
+    delay(5000);
 
     Serial.println("loop - Pausa motores");
     motorController.stop();
