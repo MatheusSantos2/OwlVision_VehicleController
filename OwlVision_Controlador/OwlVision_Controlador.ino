@@ -201,7 +201,7 @@ void engineControl(){
     rightSpeedConstrain = constrain(rightSpeedConstrain, 80, 100);
 
     Serial.println("loop - Velocidade Direita: " + String(rightSpeedConstrain) + "; Velocidade Esquerda: " + String(leftSpeedConstrain) + " Theta: " + theta_current);
-    accelerateMotors(rightSpeed, leftSpeedConstrain);
+    accelerateMotors(rightSpeedConstrain, leftSpeedConstrain);
     delay(5000);
 
     Serial.println("loop - Pausa motores");
